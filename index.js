@@ -2,8 +2,34 @@ import express from 'express';
 import mysql from 'mysql2';
 import cors from 'cors';
 
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
 
 const app = express();
+
+
+
+app.use(express.json());
+app.use(cors());
+app.use(express.static('public'));
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "public/images");
+  },
+  filename: (req, file, cb) => {
+    cb(null,
+      file.fieldname + "_" + Date.now() + path.extname(file.originalname)
+    );
+  },
+});
+
+
+const upload = multer({ storage: storage });
+
+
 
 const db = mysql.createConnection({
     host: "localhost",
@@ -12,8 +38,6 @@ const db = mysql.createConnection({
     database: "nasait"
 })
 
-app.use(express.json());
-app.use(cors())
 
 
 
@@ -288,22 +312,74 @@ app.get("/category/:id", (req, res) => {
     return res.json(data);
   });
 });
-///////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////// Create discount
-//////////////////////////////////////////////////////////////////////////////////////////////
-app.post("/category", (req, res) => {
-  console.log(req.body);
 
-  const q = "INSERT INTO category (categoryname, description) VALUES (?,?)";
 
-  const { categoryName, description } = req.body;
 
-  db.query(q, [categoryName, description], (err, data) => {
-    if (err) return res.json(err);
-    return res.json("Category has been created successfully!");
+////////////////////////////////////////////////////////////////////////////
+///////////////////////     Image upload Start
+////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+app.post("/upload/:categoryId", upload.single("image"), (req, res) => {
+  console.log(req.file);
+  const image = req.file.filename;
+  const categoryId = req.params.categoryId;
+  const sql = "UPDATE category SET image = ? WHERE category_id = ?";
+  db.query(sql, [image, categoryId], (err, result) => {
+    if (err) return res.json({ Message: "Error" });
+    return res.json({ Message: "Success" });
   });
 });
 
+
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+
+
+app.get("/", (req, res) => {
+  const sql = "SELECT * FROM category";
+  db.query(sql, (err, result) => {
+    if (err) return res.json("Error");
+    return res.json(result);
+  });
+});
+
+
+////////////////////////////////////////////////////////////////////////////
+///////////////////////     Image upload end
+////////////////////////////////////////////////////////////////////////////
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////// Create category
+//////////////////////////////////////////////////////////////////////////////////////////////
+// app.post("/category", (req, res) => {
+//   console.log(req.body);
+
+//   const q = "INSERT INTO category (categoryname, description) VALUES (?,?)";
+
+//   const { categoryName, description } = req.body;
+
+//   db.query(q, [categoryName, description], (err, data) => {
+//     if (err) return res.json(err);
+//     return res.json("Category has been created successfully!");
+//   });
+// });
+
+
+app.post("/category", (req, res) => {
+  const { categoryName, description } = req.body;
+  const sql = "INSERT INTO category (categoryName, description) VALUES (?, ?)";
+  db.query(sql, [categoryName, description], (err, result) => {
+    if (err) return res.json({ Message: "Error" });
+    const categoryId = result.insertId;
+    res.json({ categoryId });
+  });
+});
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -353,16 +429,35 @@ app.put("/category/:id", (req, res) => {
 
 
 
-app.get("/item", (req, res) => {
-  // const q = "SELECT * FROM item";
-    const q =
-      "SELECT item_id, itemname, categoryname, brandname, description, TO_BASE64(image) AS image FROM item";
+// app.get("/item", (req, res) => {
+//   // const q = "SELECT * FROM item";
+//     const q =
+//       "SELECT item_id, itemname, categoryname, brandname, description, TO_BASE64(image) AS image FROM item";
 
-  db.query(q, (err, data) => {
-    if (err) return res.json(err);
-    return res.json(data);
+//   db.query(q, (err, data) => {
+//     if (err) return res.json(err);
+//     return res.json(data);
+//   });
+// });
+
+
+app.get("/item", (req, res) => {
+  const sql = "SELECT * FROM item";
+  db.query(sql, (err, result) => {
+    if (err) return res.json("Error");
+    return res.json(result);
   });
 });
+
+
+
+
+
+
+
+
+
+
 
 // app.get("/item", (req, res) => {
 //   const q =
@@ -392,21 +487,58 @@ app.get("/item/:id", (req, res) => {
     return res.json(data);
   });
 });
+// pp
 
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////     Item Image uploading part start      //////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+app.post("/uploadd/:itemId", upload.single("image"), (req, res) => {
+  console.log(req.file);
+  const image = req.file.filename;
+  const itemId = req.params.itemId;
+  const sql = "UPDATE item SET image = ? WHERE item_id = ?";
+  db.query(sql, [image, itemId], (err, result) => {
+    if (err) return res.json({ Message: "Error" });
+    return res.json({ Message: "Success" });
+  });
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////       Item Image uploading part  End       //////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////// Create Item
 //////////////////////////////////////////////////////////////////////////////////////////////
-app.post("/item", (req, res) => {
+app.post("/item",  (req, res) => {
   console.log(req.body);
 
   //SELECT item_id, itemname, categoryname, brandname, description, TO_BASE64(image) AS image FROM item"
 
-  const q = "INSERT INTO item (itemname, categoryname, brandname, description, image) VALUES (?,?,?,?,?)";
+  const q = "INSERT INTO item (itemname, category_id, brandname, description) VALUES (?,?,?,?)";
 
-  const { itemname, categoryname, brandname, description, image } = req.body;
+  const { itemname, categoryId, brandname, description } = req.body;
 
-  db.query(q, [itemname, categoryname, brandname, description, image], (err, data) => {
+  db.query(q, [itemname, categoryId, brandname, description], (err, data) => {
     if (err) return res.json(err);
     return res.json("Item has been created successfully!");
   });
@@ -431,12 +563,13 @@ app.delete("/item/:id", (req, res) => {
 app.put("/item/:id", (req, res) => {
   const itemId = req.params.id;
   const q =
-    "UPDATE category SET `itemname` = ?, `categoryname` = ?, `brandname` = ?, `description` = ?, WHERE item_id  = ?";
+    "UPDATE category SET `itemname` = ?, `category_id` = ?, `brandname` = ?, `description` = ?, WHERE item_id  = ?";
 
-  const { itemname, categoryname, brandname, description } = req.body;
+  const { itemname, categoryid, brandname, description } = req.body;
 
   db.query(
-    q, [itemname, categoryname, brandname, description, itemId],
+    q,
+    [itemname, categoryid, brandname, description, itemId],
     (err, data) => {
       if (err) return res.json(err);
       return res.json("Item has been updated successfully!");
@@ -444,6 +577,149 @@ app.put("/item/:id", (req, res) => {
   );
 });
 
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////               Add Stock                //////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+app.post("/addstock", (req, res) => {
+  console.log(req.body);
+
+   const q =
+     "INSERT INTO addstock (item_id, supplier_id, quantity, purchaseprice, sellprice, description, date) VALUES (?,?,?,?,?,?,?)";
+
+   const { itemid, supplierid, quantity, purchaseprice, sellprice, description, date } = req.body;
+
+  db.query(
+    q,
+    [
+      itemid,
+      supplierid,
+      quantity,
+      purchaseprice,
+      sellprice,
+      description,
+      date,
+    ],
+    (err, data) => {
+      if (err) return res.json(err);
+      return res.json("Stock has been added successfully!");
+    }
+  );
+});
+
+
+
+// app.get("/item", (req, res) => {
+//   const q = "SELECT * FROM item WHERE item.categoryname = category.categoryname";
+
+//    db.query(q, [req.params.id], (err, data) => {
+//      if (err) return res.json(err);
+//      return res.json(data);
+//    });
+  
+// })
+
+
+// app.get("/item", (req, res) => {
+//   const q = "SELECT * FROM item"; // Select all items
+
+//   db.query(q, (err, items) => {
+//     if (err) return res.json(err);
+
+//     // Assuming you have category information within each item, you can directly filter items in the backend
+//     // based on categoryname.
+//     const filteredItems = items.filter(
+//       (item) => item.categoryname === req.params.categoryname
+//     );
+
+//     return res.json(filteredItems);
+//   });
+// });
+
+
+
+app.get("/items/:categoryid",  (req, res) => {
+  const q = "SELECT * FROM item WHERE category_id = ?";
+  console.log(req.params);
+  const category_id = req.params.categoryid
+  // const {categoryid} = req.params
+
+
+   db.query(q, [category_id], (err, data) => {
+    if (err) {
+      return res.json(err);
+    } else {
+      console.log("data aaaaaaaawa");
+      console.log(data);
+      return res.json(data);
+    }
+  });
+});
+
+
+
+
+
+
+
+
+
+
+
+
+// app.get("/item/:id", (req, res) => {
+//   const q = "SELECT * FROM item WHERE item_id = ?";
+
+//   db.query(q, [req.params.id], (err, data) => {
+//     if (err) return res.json(err);
+//     return res.json(data);
+//   });
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////
 
 
 app.listen(8081, () => {
